@@ -8,19 +8,22 @@ class LSUVInit(object):
 
     def __init__(self,
                  model: nn.Module,
-                 data_loader: DataLoader,
+                 data_loader: DataLoader = None,  # Or, pass in a data_batch directly
+                 data_batch = None,  # Should be on correct device, and passable to model.forward()
                  needed_std: float = 1.0,
                  std_tol: float = 0.1,
                  max_attempts: int = 10,
                  do_orthonorm: bool = True,
-                 device: torch.device = 'str') -> None:
+                 device: torch.device = None,  # If none, then use the model's existing device
+                 ) -> None:
         self._model = model
         self.data_loader = data_loader
+        self.data_batch = data_batch
         self.needed_std = needed_std
         self.std_tol = std_tol
         self.max_attempts = max_attempts
         self.do_orthonorm = do_orthonorm
-        self.device = device
+        self.device = model.device if device is None else device
 
         self.eps = 1e-8
         self.hook_position = 0
@@ -108,8 +111,12 @@ class LSUVInit(object):
         for layer_idx in range(self.total_fc_conv_layers):
             print(layer_idx)
             model.apply(self.add_current_hook)
-            data = next(iter(self.data_loader))
-            data, _ = [d.to(self.device) for d in data]
+            if self.data_loader is not None:
+                data = next(iter(self.data_loader))
+                if self.device is not None:
+                    data, _ = [d.to(self.device) for d in data]
+            else:
+                data = self.data_batch
             model(data)
             current_std = self.act_dict.std()
             print('std at layer ', layer_idx, ' = ', current_std)
